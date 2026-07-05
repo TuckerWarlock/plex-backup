@@ -171,37 +171,21 @@ foreach ($app in $apps) {
     }
 }
 
-# 4) qBittorrent
+# 4) qBittorrent (PowerShell/filesystem backup)
 $qbtDest = Join-Path $stagingRoot "Apps\qBittorrent"
 Ensure-Directory -Path $qbtDest
 
-$qbtbar = Get-Command -Name "qbtbar" -ErrorAction SilentlyContinue
-if ($null -ne $qbtbar) {
-    $qbtbarOut = Join-Path $qbtDest "qbtbar"
-    Ensure-Directory -Path $qbtbarOut
-    & $qbtbar.Source -b $qbtbarOut
-    if ($LASTEXITCODE -ne 0) {
-        throw "qbtbar backup failed with exit code $LASTEXITCODE"
-    }
+$qbtRoaming = Join-Path $env:APPDATA "qBittorrent"
+$qbtLocal = Join-Path $env:LOCALAPPDATA "qBittorrent"
+$roamingCopied = Copy-DirectoryIfExists -Source $qbtRoaming -Destination (Join-Path $qbtDest "Roaming")
+$localCopied = Copy-DirectoryIfExists -Source $qbtLocal -Destination (Join-Path $qbtDest "Local")
 
-    $manifest.included.apps["qBittorrent"] = @{
-        mode = "qbtbar"
-        destination = $qbtbarOut
-    }
-}
-else {
-    $qbtRoaming = Join-Path $env:APPDATA "qBittorrent"
-    $qbtLocal = Join-Path $env:LOCALAPPDATA "qBittorrent"
-    $roamingCopied = Copy-DirectoryIfExists -Source $qbtRoaming -Destination (Join-Path $qbtDest "Roaming")
-    $localCopied = Copy-DirectoryIfExists -Source $qbtLocal -Destination (Join-Path $qbtDest "Local")
-
-    $manifest.included.apps["qBittorrent"] = @{
-        mode = "FilesystemCopy"
-        roamingPath = $qbtRoaming
-        localPath = $qbtLocal
-        roamingCopied = $roamingCopied
-        localCopied = $localCopied
-    }
+$manifest.included.apps["qBittorrent"] = @{
+    mode = "FilesystemCopy"
+    roamingPath = $qbtRoaming
+    localPath = $qbtLocal
+    roamingCopied = $roamingCopied
+    localCopied = $localCopied
 }
 
 $manifestPath = Join-Path $stagingRoot "manifest.json"

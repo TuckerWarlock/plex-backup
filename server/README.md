@@ -5,7 +5,7 @@ This script creates a weekly Plex backup zip containing:
 1. Plex data directory (`%LOCALAPPDATA%\Plex Media Server`)
 2. Plex Windows registry settings (`HKCU\Software\Plex, Inc.\Plex Media Server`)
 
-Script: `windows/backup-plex-server.ps1`
+Script: `server/backup-plex-server.ps1`
 
 ## Paths and keys
 
@@ -17,7 +17,7 @@ Because this key is under `HKCU`, run backup/restore using the same Windows user
 ## Run manually
 
 ```powershell
-powershell -ExecutionPolicy Bypass -File "C:\path\to\repo\windows\backup-plex-server.ps1" `
+powershell -ExecutionPolicy Bypass -File "C:\path\to\repo\server\backup-plex-server.ps1" `
   -BackupRoot "D:\PlexBackups" `
   -RetentionCount 8
 ```
@@ -25,7 +25,7 @@ powershell -ExecutionPolicy Bypass -File "C:\path\to\repo\windows\backup-plex-se
 ## Schedule weekly (Task Scheduler)
 
 ```cmd
-schtasks /Create /TN "Plex Weekly Backup" /SC WEEKLY /D SUN /ST 03:00 /RL HIGHEST /TR "powershell -ExecutionPolicy Bypass -File C:\path\to\repo\windows\backup-plex-server.ps1 -BackupRoot D:\PlexBackups -RetentionCount 8" /F
+schtasks /Create /TN "Plex Weekly Backup" /SC WEEKLY /D SUN /ST 03:00 /RL HIGHEST /TR "powershell -ExecutionPolicy Bypass -File C:\path\to\repo\server\backup-plex-server.ps1 -BackupRoot D:\PlexBackups -RetentionCount 8" /F
 ```
 
 ## Restore notes (Windows to Windows)
