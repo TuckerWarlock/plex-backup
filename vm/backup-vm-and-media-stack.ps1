@@ -241,9 +241,10 @@ function Start-AppIfWasRunning {
 }
 
 # arr stack and download clients.
-# Sonarr/Radarr/Prowlarr only copy already-exported backup zips (low risk).
-# Bazarr/Jackett copy live app data directly, so they're stopped first the
-# same way qBittorrent is below.
+# Sonarr/Radarr/Prowlarr/Lidarr/Bazarr only copy already-exported backup
+# zips (low risk, app not stopped). Jackett has no built-in backup export,
+# so its live app data is copied directly and it's stopped first the same
+# way qBittorrent is below.
 $apps = @(
     @{
         Name   = "Sonarr"
@@ -264,11 +265,16 @@ $apps = @(
         Filter = "*.zip"
     },
     @{
-        Name        = "Bazarr"
-        Mode        = "DirectoryCopy"
-        Source      = "C:\ProgramData\Bazarr"
-        ServiceName = "Bazarr"
-        ProcessName = "Bazarr"
+        Name   = "Lidarr"
+        Mode   = "NewestBackups"
+        Source = "C:\ProgramData\Lidarr\Backups"
+        Filter = "*.zip"
+    },
+    @{
+        Name   = "Bazarr"
+        Mode   = "NewestBackups"
+        Source = "C:\ProgramData\Bazarr\backup"
+        Filter = "*.zip"
     },
     @{
         Name        = "Jackett"

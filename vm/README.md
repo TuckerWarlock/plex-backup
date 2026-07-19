@@ -4,7 +4,7 @@ This plan creates one weekly backup zip that includes:
 
 1. Your Windows **Documents** folder (skip with `-SkipDocuments`).
 2. Optional **Hyper-V VM exports** (only if you pass VM names via `-HyperVVMNames`).
-3. Backup payloads for **Sonarr, Radarr, Prowlarr, Bazarr, Jackett, qBittorrent**.
+3. Backup payloads for **Sonarr, Radarr, Prowlarr, Lidarr, Bazarr, Jackett, qBittorrent**.
 
 If you already back up the Hyper-V host/VM separately, just omit `-HyperVVMNames`
 (the default) — the Hyper-V step is entirely skipped, no checkpoint or export is
@@ -19,8 +19,11 @@ Script: `vm/backup-vm-and-media-stack.ps1`
   - `C:\ProgramData\Sonarr`
   - `C:\ProgramData\Radarr`
   - `C:\ProgramData\Prowlarr`
+  - `C:\ProgramData\Lidarr`
   These are from Servarr Wiki appdata pages.
-- Sonarr/Radarr/Prowlarr have built-in backup functions in `System => Backups` (Servarr Wiki system pages), so this plan copies recent backup zips from each app's `Backups` folder. Servarr apps file these into subfolders — `Backups\scheduled` (automatic, on the configured interval, default every 7 days), `Backups\manual` (triggered from the UI), and `Backups\update` (taken automatically before an update) — so the script searches recursively under `Backups` and takes the newest N files across all three, not just `Backups\scheduled`.
+- Sonarr/Radarr/Prowlarr/Lidarr have built-in backup functions in `System => Backups` (Servarr Wiki system pages), so this plan copies recent backup zips from each app's `Backups` folder. Servarr apps file these into subfolders — `Backups\scheduled` (automatic, on the configured interval, default every 7 days), `Backups\manual` (triggered from the UI), and `Backups\update` (taken automatically before an update) — so the script searches recursively under `Backups` and takes the newest N files across all three, not just `Backups\scheduled`.
+- Bazarr also has a built-in scheduled backup (`Settings => Backup`), defaulting to `C:\ProgramData\Bazarr\backup`, so it's treated the same way — newest N backup zips copied, app not stopped — rather than a full directory copy.
+- Jackett has no equivalent built-in backup export, so its live appdata directory is copied directly (and the app is stopped first, see below).
 - TRaSH Guides qBittorrent pages focus on path consistency and shared-root layouts; this plan backs up qBittorrent directly from Windows profile paths.
 
 ## What the script backs up
@@ -33,8 +36,10 @@ Script: `vm/backup-vm-and-media-stack.ps1`
   - `C:\ProgramData\Radarr\Backups\**\*.zip` (latest N files across `scheduled`/`manual`/`update`)
 - **Prowlarr**
   - `C:\ProgramData\Prowlarr\Backups\**\*.zip` (latest N files across `scheduled`/`manual`/`update`)
+- **Lidarr**
+  - `C:\ProgramData\Lidarr\Backups\**\*.zip` (latest N files across `scheduled`/`manual`/`update`)
 - **Bazarr**
-  - `C:\ProgramData\Bazarr` (full directory copy)
+  - `C:\ProgramData\Bazarr\backup\*.zip` (latest N files)
 - **Jackett**
   - `C:\ProgramData\Jackett` (full directory copy)
 - **qBittorrent**
@@ -47,9 +52,9 @@ The script writes a `manifest.json` inside each backup zip so you can see exactl
 
 ## Stop/restart behavior
 
-Bazarr, Jackett, and qBittorrent hold live, mutable data (databases, session/resume state), so the script stops each one (service if installed as one, otherwise the matching process) before copying its data and restarts it afterward — mirroring what `server/backup-plex-server.ps1` does for Plex. Sonarr/Radarr/Prowlarr are **not** stopped, since only their already-exported backup zips are copied, not live data.
+Jackett and qBittorrent hold live, mutable data with no built-in backup export, so the script stops each one (service if installed as one, otherwise the matching process) before copying its data and restarts it afterward — mirroring what `server/backup-plex-server.ps1` does for Plex. Sonarr/Radarr/Prowlarr/Lidarr/Bazarr are **not** stopped, since only their already-exported backup zips are copied, not live data.
 
-The service/process names used to detect and stop Bazarr (`Bazarr`) and Jackett (`Jackett` service / `JackettConsole` process) are best-effort guesses — if your install uses different names, the script won't find them, silently skips the stop/restart step, and copies the data live (same as previous behavior). If you know your install's actual service/process name differs, edit the `ServiceName`/`ProcessName` values in the `$apps` array in `vm/backup-vm-and-media-stack.ps1`.
+The service/process names used to detect and stop Jackett (`Jackett` service / `JackettConsole` process) are best-effort guesses — if your install uses different names, the script won't find them, silently skips the stop/restart step, and copies the data live (same as previous behavior). If you know your install's actual service/process name differs, edit the `ServiceName`/`ProcessName` values in the `$apps` array in `vm/backup-vm-and-media-stack.ps1`.
 
 ## Run manually
 
@@ -74,7 +79,7 @@ powershell -ExecutionPolicy Bypass -File "C:\path\to\repo\vm\backup-vm-and-media
   -ArrBackupCopiesPerApp 4 `
   -SkipDocuments
 ```
-Omitting `-HyperVVMNames` already skips the Hyper-V step by default, so combined with `-SkipDocuments` this backs up only Sonarr/Radarr/Prowlarr/Bazarr/Jackett/qBittorrent.
+Omitting `-HyperVVMNames` already skips the Hyper-V step by default, so combined with `-SkipDocuments` this backs up only Sonarr/Radarr/Prowlarr/Lidarr/Bazarr/Jackett/qBittorrent.
 
 ### Estimate size before running
 
@@ -90,7 +95,7 @@ powershell -ExecutionPolicy Bypass -File "C:\path\to\repo\vm\backup-vm-and-media
   -BackupRoot "D:\ServerBackups" `
   -OffsiteDestination "\\nas\Backups\ServerBackups"
 ```
-`-BackupRoot` stays local — staging, live app copies (while Bazarr/Jackett/qBittorrent are briefly stopped), and zip creation all happen on local disk, so app downtime and total runtime aren't at the mercy of network speed. Once the local zip is created and passes its integrity check, it's copied to `-OffsiteDestination` (any path the account can write to — UNC share or mapped drive) and the same `-RetentionCount` policy is applied there independently. If the offsite copy fails (share unreachable, permissions), it's logged as a warning only — the local backup is not affected or rolled back.
+`-BackupRoot` stays local — staging, the live app copy (while Jackett/qBittorrent are briefly stopped), and zip creation all happen on local disk, so app downtime and total runtime aren't at the mercy of network speed. Once the local zip is created and passes its integrity check, it's copied to `-OffsiteDestination` (any path the account can write to — UNC share or mapped drive) and the same `-RetentionCount` policy is applied there independently. If the offsite copy fails (share unreachable, permissions), it's logged as a warning only — the local backup is not affected or rolled back.
 
 ## Schedule weekly (Task Scheduler)
 
@@ -103,8 +108,8 @@ schtasks /Create /TN "Weekly VM+ARR Backup" /SC WEEKLY /D SUN /ST 03:30 /RL HIGH
 0. Check `manifest.json`'s `errors` array first — a non-empty array means one or more components in that specific backup run failed and may be missing or incomplete; pick a different backup if the component you need to restore is affected.
 1. Extract the selected backup zip.
 2. Restore each app before first launch (or while app/service is stopped):
-   - Sonarr/Radarr/Prowlarr: use app restore flow from backup zip if preferred.
-   - Bazarr/Jackett/qBittorrent: restore copied config/data folders.
+   - Sonarr/Radarr/Prowlarr/Lidarr/Bazarr: use app restore flow from backup zip if preferred.
+   - Jackett/qBittorrent: restore copied config/data folders.
 3. For Hyper-V, import or register from exported VM folders.
 4. Start services and validate app health.
 
@@ -116,3 +121,4 @@ schtasks /Create /TN "Weekly VM+ARR Backup" /SC WEEKLY /D SUN /ST 03:30 /RL HIGH
   - https://wiki.servarr.com/sonarr/appdata-directory
   - https://wiki.servarr.com/radarr/appdata-directory
   - https://wiki.servarr.com/prowlarr/appdata-directory
+  - https://wiki.servarr.com/lidarr/appdata-directory

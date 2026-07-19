@@ -4,7 +4,7 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 ## What this is
 
-Windows-focused PowerShell backup automation for a Plex/media server: one script backs up the Plex server itself, another backs up a VM's Documents folder plus the arr/download-client stack (Sonarr, Radarr, Prowlarr, Bazarr, Jackett, qBittorrent) and optional Hyper-V VM exports.
+Windows-focused PowerShell backup automation for a Plex/media server: one script backs up the Plex server itself, another backs up a VM's Documents folder plus the arr/download-client stack (Sonarr, Radarr, Prowlarr, Lidarr, Bazarr, Jackett, qBittorrent) and optional Hyper-V VM exports.
 
 ## Build, test, and lint
 
@@ -22,7 +22,7 @@ There's no single-test command since there are no automated tests.
 Two independent, parallel backup flows, each pairing a script with an operational README:
 
 - **`server/backup-plex-server.ps1`** (+ `server/README.md`) — stops the Plex service/process, `robocopy`-mirrors `%LOCALAPPDATA%\Plex Media Server` (excluding `Cache`, `Codecs`, `Crash Reports`, `Logs`), exports the `HKCU\Software\Plex, Inc.\Plex Media Server` registry key to a `.reg` file, restarts Plex, writes `manifest.json`, zips the staging folder, then applies retention.
-- **`vm/backup-vm-and-media-stack.ps1`** (+ `vm/README.md`) — builds one zip covering the Documents folder, optional Hyper-V `Export-VM` output, the newest N backup zips from each arr app's `Backups` folder (Sonarr/Radarr/Prowlarr), full directory copies for Bazarr/Jackett, and filesystem copies of qBittorrent's `%APPDATA%`/`%LOCALAPPDATA%` profile data. Records what was actually captured in `manifest.json`.
+- **`vm/backup-vm-and-media-stack.ps1`** (+ `vm/README.md`) — builds one zip covering the Documents folder, optional Hyper-V `Export-VM` output, the newest N backup zips from each arr app's `Backups` folder (Sonarr/Radarr/Prowlarr/Lidarr, recursed since Servarr apps file these under `Backups\scheduled`/`manual`/`update`) and Bazarr's built-in `backup` folder, a full directory copy for Jackett (no built-in backup export), and filesystem copies of qBittorrent's `%APPDATA%`/`%LOCALAPPDATA%` profile data. Records what was actually captured in `manifest.json`.
 
 The per-directory README files are operational docs (manual run commands, Task Scheduler setup, restore steps) and must stay aligned with actual script behavior when either changes.
 
@@ -40,8 +40,9 @@ The per-directory README files are operational docs (manual run commands, Task S
 ## Source paths this repo assumes (Windows)
 
 - Plex data: `%LOCALAPPDATA%\Plex Media Server`; Plex registry: `HKCU\Software\Plex, Inc.\Plex Media Server`.
-- Sonarr/Radarr/Prowlarr appdata: `C:\ProgramData\<App>` with backup zips under `C:\ProgramData\<App>\Backups`.
-- Bazarr/Jackett appdata: `C:\ProgramData\Bazarr`, `C:\ProgramData\Jackett` (full directory copy, no built-in backup export used).
+- Sonarr/Radarr/Prowlarr/Lidarr appdata: `C:\ProgramData\<App>` with backup zips under `C:\ProgramData\<App>\Backups` (searched recursively — Servarr apps file these into `scheduled`/`manual`/`update` subfolders, not directly in `Backups`).
+- Bazarr appdata: `C:\ProgramData\Bazarr`, with its own built-in scheduled backup zips under `C:\ProgramData\Bazarr\backup`.
+- Jackett appdata: `C:\ProgramData\Jackett` (full directory copy, no built-in backup export used).
 - qBittorrent: `%APPDATA%\qBittorrent` and `%LOCALAPPDATA%\qBittorrent`.
 
 If these locations change (e.g. app moved to a different data root), update both the script's source paths and the corresponding README.
