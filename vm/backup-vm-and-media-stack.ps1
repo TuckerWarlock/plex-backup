@@ -277,11 +277,18 @@ $apps = @(
         Filter = "*.zip"
     },
     @{
-        Name        = "Jackett"
-        Mode        = "DirectoryCopy"
-        Source      = "C:\ProgramData\Jackett"
-        ServiceName = "Jackett"
-        ProcessName = "JackettConsole"
+        Name             = "Jackett"
+        Mode             = "DirectoryCopy"
+        Source           = "C:\ProgramData\Jackett"
+        ServiceName      = "Jackett"
+        ProcessName      = "JackettConsole"
+        # Per https://github.com/Jackett/Jackett/issues/2576: ServerConfig.json
+        # and Indexers hold the config, but DataProtection holds the keys used
+        # to decrypt indexer passwords in that config - without it, a restored
+        # config's passwords are permanently unusable even though the file
+        # copied fine. All three should already be inside a full directory
+        # copy of $Source; this just verifies that actually happened.
+        RequiredSubpaths = @("ServerConfig.json", "Indexers", "DataProtection")
     }
 )
 
@@ -420,10 +427,26 @@ try {
                 $stopState = Stop-AppIfRunning -Name $appName -ServiceName $app.ServiceName -ProcessName $app.ProcessName
                 try {
                     $copied = Copy-DirectoryIfExists -Source $app.Source -Destination $appDest
+
+                    $missingRequired = @()
+                    if ($copied -and $app.RequiredSubpaths) {
+                        foreach ($subpath in $app.RequiredSubpaths) {
+                            if (-not (Test-Path -LiteralPath (Join-Path $appDest $subpath))) {
+                                $missingRequired += $subpath
+                            }
+                        }
+                        if ($missingRequired.Count -gt 0) {
+                            $warningText = "$appName backup is missing expected path(s): $($missingRequired -join ', '). Restore may be incomplete."
+                            Write-Warning $warningText
+                            $manifest.errors += $warningText
+                        }
+                    }
+
                     $manifest.included.apps[$appName] = [ordered]@{
-                        mode   = "DirectoryCopy"
-                        source = $app.Source
-                        copied = $copied
+                        mode            = "DirectoryCopy"
+                        source          = $app.Source
+                        copied          = $copied
+                        missingRequired = $missingRequired
                     }
                 }
                 finally {
