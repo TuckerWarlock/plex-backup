@@ -20,7 +20,7 @@ Script: `vm/backup-vm-and-media-stack.ps1`
   - `C:\ProgramData\Radarr`
   - `C:\ProgramData\Prowlarr`
   These are from Servarr Wiki appdata pages.
-- Sonarr/Radarr/Prowlarr have built-in backup functions in `System => Backups` (Servarr Wiki system pages), so this plan copies recent backup zips from each app's `Backups` folder.
+- Sonarr/Radarr/Prowlarr have built-in backup functions in `System => Backups` (Servarr Wiki system pages), so this plan copies recent backup zips from each app's `Backups` folder. Servarr apps file these into subfolders — `Backups\scheduled` (automatic, on the configured interval, default every 7 days), `Backups\manual` (triggered from the UI), and `Backups\update` (taken automatically before an update) — so the script searches recursively under `Backups` and takes the newest N files across all three, not just `Backups\scheduled`.
 - TRaSH Guides qBittorrent pages focus on path consistency and shared-root layouts; this plan backs up qBittorrent directly from Windows profile paths.
 
 ## What the script backs up
@@ -28,11 +28,11 @@ Script: `vm/backup-vm-and-media-stack.ps1`
 - **Documents**
   - `%USERPROFILE%\Documents`
 - **Sonarr**
-  - `C:\ProgramData\Sonarr\Backups\*.zip` (latest N files)
+  - `C:\ProgramData\Sonarr\Backups\**\*.zip` (latest N files across `scheduled`/`manual`/`update`)
 - **Radarr**
-  - `C:\ProgramData\Radarr\Backups\*.zip` (latest N files)
+  - `C:\ProgramData\Radarr\Backups\**\*.zip` (latest N files across `scheduled`/`manual`/`update`)
 - **Prowlarr**
-  - `C:\ProgramData\Prowlarr\Backups\*.zip` (latest N files)
+  - `C:\ProgramData\Prowlarr\Backups\**\*.zip` (latest N files across `scheduled`/`manual`/`update`)
 - **Bazarr**
   - `C:\ProgramData\Bazarr` (full directory copy)
 - **Jackett**

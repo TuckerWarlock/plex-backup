@@ -69,7 +69,10 @@ function Copy-NewestFiles {
     }
 
     Ensure-Directory -Path $DestinationDir
-    $files = Get-ChildItem -Path $SourceDir -Filter $Filter -File -ErrorAction Stop |
+    # Sonarr/Radarr/Prowlarr file their backups under Backups\scheduled,
+    # Backups\manual, and Backups\update rather than directly in Backups, so
+    # this has to recurse to find them.
+    $files = Get-ChildItem -Path $SourceDir -Filter $Filter -File -Recurse -ErrorAction Stop |
         Sort-Object LastWriteTime -Descending |
         Select-Object -First $KeepCount
 
@@ -142,7 +145,7 @@ function Get-NewestFilesSize {
     if (-not (Test-Path -LiteralPath $SourceDir)) {
         return 0
     }
-    $files = Get-ChildItem -Path $SourceDir -Filter $Filter -File -ErrorAction SilentlyContinue |
+    $files = Get-ChildItem -Path $SourceDir -Filter $Filter -File -Recurse -ErrorAction SilentlyContinue |
         Sort-Object LastWriteTime -Descending |
         Select-Object -First $KeepCount
     $size = ($files | Measure-Object -Property Length -Sum).Sum
