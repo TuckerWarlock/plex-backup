@@ -112,14 +112,14 @@ try {
         $copyCmd = "robocopy `"$plexData`" `"$runFolder\Plex Media Server`" /MIR /R:2 /W:2 /XJ " + ($excludeArgs -join " ")
         cmd /c $copyCmd | Out-Null
         if ($LASTEXITCODE -ge 8) {
-            throw "Robocopy failed with exit code $LASTEXITCODE"
+            throw "Robocopy failed copying '$plexData' to '$runFolder\Plex Media Server' with exit code $LASTEXITCODE"
         }
 
         # Backup Windows registry values Plex documents for migration
         $registryFile = Join-Path $runFolder "PlexSettings.reg"
         reg export "HKCU\Software\Plex, Inc.\Plex Media Server" "$registryFile" /y | Out-Null
         if ($LASTEXITCODE -ne 0) {
-            throw "Registry export failed with exit code $LASTEXITCODE"
+            throw "Registry export of 'HKCU\Software\Plex, Inc.\Plex Media Server' to '$registryFile' failed with exit code $LASTEXITCODE"
         }
     }
     finally {
@@ -163,7 +163,6 @@ try {
     }
     Compress-Archive -Path (Join-Path $runFolder "*") -DestinationPath $zipPath -CompressionLevel Optimal
     Test-ZipIntegrity -ZipPath $zipPath
-    Remove-Item -LiteralPath $runFolder -Recurse -Force
 }
 catch {
     # Don't leave partial staging output or a corrupt zip behind on failure
@@ -174,6 +173,17 @@ catch {
         Remove-Item -LiteralPath $zipPath -Force -ErrorAction SilentlyContinue
     }
     throw
+}
+
+# Staging cleanup is best-effort now that the zip is verified - a transient
+# file lock here (AV scan, indexer) shouldn't cost us an already-valid backup.
+if (Test-Path -LiteralPath $runFolder) {
+    try {
+        Remove-Item -LiteralPath $runFolder -Recurse -Force
+    }
+    catch {
+        Write-Warning "Could not remove staging folder '$runFolder': $_. The zip at '$zipPath' is valid; clean it up manually."
+    }
 }
 
 # Retention

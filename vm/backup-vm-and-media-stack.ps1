@@ -182,17 +182,26 @@ function Stop-AppIfRunning {
     if ($service -and $service.Status -eq "Running") {
         Stop-Service -Name $ServiceName -Force
         Start-Sleep -Seconds 3
-        return @{ WasRunning = $true; ViaService = $true }
+        return @{ WasRunning = $true; ViaService = $true; ExecutablePath = $null }
     }
 
     $processes = Get-Process -Name $ProcessName -ErrorAction SilentlyContinue
     if ($processes) {
+        # Capture the running exe's own path so a process-based (non-service)
+        # install can be relaunched automatically, not just via a guessed path.
+        $executablePath = $null
+        try {
+            $executablePath = $processes | Select-Object -First 1 -ExpandProperty Path -ErrorAction Stop
+        }
+        catch {
+            $executablePath = $null
+        }
         $processes | Stop-Process -Force
         Start-Sleep -Seconds 3
-        return @{ WasRunning = $true; ViaService = $false }
+        return @{ WasRunning = $true; ViaService = $false; ExecutablePath = $executablePath }
     }
 
-    return @{ WasRunning = $false; ViaService = $false }
+    return @{ WasRunning = $false; ViaService = $false; ExecutablePath = $null }
 }
 
 function Start-AppIfWasRunning {
@@ -211,11 +220,16 @@ function Start-AppIfWasRunning {
         if ($StopState.ViaService) {
             Start-Service -Name $ServiceName
         }
-        elseif ($ExecutablePath) {
-            Start-Process -FilePath $ExecutablePath
-        }
         else {
-            Write-Warning "$Name was stopped for backup but could not be relaunched automatically. Start it manually."
+            # Prefer the path captured from the actual running process over a
+            # caller-supplied guess (e.g. qBittorrent's Program Files lookup).
+            $resolvedPath = if ($StopState.ExecutablePath) { $StopState.ExecutablePath } else { $ExecutablePath }
+            if ($resolvedPath) {
+                Start-Process -FilePath $resolvedPath
+            }
+            else {
+                Write-Warning "$Name was stopped for backup but could not be relaunched automatically. Start it manually."
+            }
         }
     }
     catch {
@@ -467,7 +481,6 @@ try {
     }
     Compress-Archive -Path (Join-Path $stagingRoot "*") -DestinationPath $zipPath -CompressionLevel Optimal
     Test-ZipIntegrity -ZipPath $zipPath
-    Remove-Item -LiteralPath $runFolder -Recurse -Force
 }
 catch {
     # Fatal, non-component-scoped failure (e.g. can't write to $BackupRoot at
@@ -480,6 +493,17 @@ catch {
         Remove-Item -LiteralPath $zipPath -Force -ErrorAction SilentlyContinue
     }
     throw
+}
+
+# Staging cleanup is best-effort now that the zip is verified - a transient
+# file lock here (AV scan, indexer) shouldn't cost us an already-valid backup.
+if (Test-Path -LiteralPath $runFolder) {
+    try {
+        Remove-Item -LiteralPath $runFolder -Recurse -Force
+    }
+    catch {
+        Write-Warning "Could not remove staging folder '$runFolder': $_. The zip at '$zipPath' is valid; clean it up manually."
+    }
 }
 
 # 6) Retention
