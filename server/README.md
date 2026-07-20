@@ -12,7 +12,11 @@ Script: `server/backup-plex-server.ps1`
 - Plex data folder (Plex docs): `%LOCALAPPDATA%\Plex Media Server`
 - Registry key (Plex migration docs): `HKEY_CURRENT_USER\Software\Plex, Inc.\Plex Media Server\`
 
-Because this key is under `HKCU`, run backup/restore using the same Windows user profile Plex runs under.
+Because this key is under `HKCU`, run backup/restore using the same Windows user profile Plex runs under. If the scheduled task is ever changed to run as a different account (e.g. `SYSTEM`), `%LOCALAPPDATA%` and `HKCU` will resolve to that account's profile, not Plex's — the backup will silently capture the wrong (or empty) data.
+
+## Stop/restart behavior
+
+The script stops Plex before copying (service if installed as one, otherwise the `Plex Media Server` process — most Windows installs run Plex as a plain process, not a service) and always attempts to restart it afterward, even if the backup itself fails partway through. If Plex was running as a process and its install path can't be found under `Program Files`, the script logs a warning instead of failing silently — check for that warning if Plex doesn't come back up after a run.
 
 ## Run manually
 
@@ -21,6 +25,17 @@ powershell -ExecutionPolicy Bypass -File "C:\path\to\repo\server\backup-plex-ser
   -BackupRoot "D:\PlexBackups" `
   -RetentionCount 8
 ```
+
+`-RetentionCount` must be at least `1` — the script always keeps the most recently created backup regardless of the value.
+
+### Offsite/network destination
+
+```powershell
+powershell -ExecutionPolicy Bypass -File "C:\path\to\repo\server\backup-plex-server.ps1" `
+  -BackupRoot "D:\PlexBackups" `
+  -OffsiteDestination "\\nas\Backups\PlexBackups"
+```
+`-BackupRoot` stays local — Plex stays stopped for the local copy only, not for however long a network copy would take. Once the local zip is created and passes its integrity check, it's copied to `-OffsiteDestination` (any path the account can write to — UNC share or mapped drive) and the same `-RetentionCount` policy is applied there independently. A failed offsite copy is logged as a warning only; it doesn't affect the local backup.
 
 ## Schedule weekly (Task Scheduler)
 
