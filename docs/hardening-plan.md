@@ -57,6 +57,9 @@ each item below should become its own change/commit.
   live data. Service/process name guesses for Bazarr/Jackett are documented
   as best-effort in `vm/README.md` — if wrong, the script degrades to the old
   copy-while-running behavior rather than failing.
+  **Later changes:**
+  - Bazarr was switched to copying its own built-in backup zips, so it is no longer stopped.
+  - qBittorrent is no longer stopped with `Stop-Process -Force`, because a hard kill is exactly how its resume data (`BT_backup`) gets lost. It is now shut down gracefully through its WebUI API and the script waits for the process to exit. If it doesn't exit, it's left running and its copy is skipped. See item 13.
 
 - [x] **4. No integrity verification after zipping.**
   Both scripts `Compress-Archive` and trust the result unconditionally
@@ -96,12 +99,15 @@ each item below should become its own change/commit.
   consider an explicit sanity check (e.g. verify `$plexData` exists and
   contains expected subfolders before proceeding).
 
-- [ ] **7. Silently-empty backups aren't distinguished from healthy ones.**
+- [x] **7. Silently-empty backups aren't distinguished from healthy ones.**
   Missing arr-app paths just log a warning and record `copiedFiles = 0` in the
   manifest (`vm:62-65`, `152-172`). A months-long silent misconfiguration looks
   identical to a healthy run in the manifest.
   **Fix:** surface zero-count "expected" components as a loud warning
   (distinct from genuinely-optional/missing ones) so it's actionable in logs.
+  **Done (VM script):** an arr app with zero backup zips is now recorded as an
+  error, which affects the exit code and `last-success.json`. Lidarr, which
+  isn't on this VM, was removed rather than left as a permanent warning.
 
 - [ ] **8. No monitoring/alerting on failure.**
   Both scripts run unattended via Task Scheduler with no notification hook and
@@ -110,6 +116,13 @@ each item below should become its own change/commit.
   **Fix:** write a `last-success.json`/timestamp file on completion that's easy
   to check externally; consider an optional notification hook (email/webhook)
   on failure.
+  **Partly done (VM script only):**
+  - Every run writes a transcript log, locally and to `<BackupRoot>\logs`.
+  - The script exits 1 on any failure, so Task Scheduler's Last Run Result shows it.
+  - `last-success.json` is written to `<BackupRoot>` only on a fully clean run.
+
+  Still open: a push notification hook, and the same treatment for
+  `server/backup-plex-server.ps1`, which hasn't been tested on the live Plex server.
 
 - [ ] **9. Documents folder may be OneDrive-redirected.**
   `vm/backup-vm-and-media-stack.ps1:98-100` backs up
@@ -132,6 +145,28 @@ each item below should become its own change/commit.
   guarded against (`Export-VM` in particular fails outright on a concurrent
   export of the same VM, which then hits item 2).
 
+## From the first live test on the indexer/downloader/monitor VM (2026-11-23)
+
+- [x] **13. qBittorrent was force-killed.** `Stop-Process -Force` risks the
+  resume data the backup exists to protect.
+  **Done:** the script now shuts qBittorrent down through the WebUI API
+  (`/api/v2/app/shutdown`), using the existing DPAPI password file, and waits
+  for the process to exit (`-QbtShutdownTimeoutSeconds`). It never kills it.
+  It relaunches qBittorrent through `explorer.exe`, so it comes back unelevated
+  in the user's desktop session.
+- [x] **14. The default `D:\ServerBackups` didn't exist on the VM.** On this VM, D:
+  is the read-only Windows install media.
+  **Done:** `-BackupRoot` now defaults to
+  `\\TUCKER-DESKTOP\Shared R Drive\VM Backups`. Staging and zipping happen
+  locally (`-StagingRoot`), and only the verified zip is uploaded. A failed
+  upload keeps the zip locally.
+- [x] **15. A transient failure lost a component for that run.**
+  **Done:** `Invoke-WithRetry` gives every fallible step exactly one retry
+  (`-RetryDelaySeconds`) before it's logged as a failure.
+- [x] **16. Hidden files were silently skipped.** Windows PowerShell 5.1's
+  `Compress-Archive` drops hidden files, such as `.git` folders under Documents.
+  **Done:** the VM script uses `System.IO.Compression.ZipFile` instead.
+
 ## Suggested order of work
 
 1. ~~Item 2 (try/finally + always-restart)~~ — done.
@@ -139,11 +174,11 @@ each item below should become its own change/commit.
 3. ~~Item 3 (stop qBittorrent/Bazarr/Jackett before copy)~~ — done, folded into item 2's edit.
 4. ~~Item 5 (retention floor/validation)~~ — done.
 5. ~~Item 4 (zip integrity check)~~ — done.
-6. **Next:** remaining items (6-12) as time allows — none are structural, so
-   any order is fine. Item 8 (failure alerting) is probably the highest
-   remaining value since items 1-5 mean failures are now caught and recorded
-   but still only surface via `Write-Warning`/`manifest.json`, which nobody's
-   watching on an unattended scheduled task.
+6. ~~Items 7, 13-16 (VM script)~~ — done; item 8 partly done for the VM script.
+7. **Next:**
+   - Bring the retry, logging and exit-code changes to `server/backup-plex-server.ps1`. This is held until it can be tested on the Plex server.
+   - Add a push notification hook for item 8.
+   - Then items 6 and 9-12 as time allows.
 
 Note: `pwsh` is available in this environment (via `dotnet tool install --global
 PowerShell`, on the PATH through `~/.dotnet/tools`) and was used to parse-check
