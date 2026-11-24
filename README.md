@@ -3,7 +3,7 @@
 Windows-focused backup scripts for:
 
 - **Plex server** configuration and database restore readiness
-- **VM / media stack** backups (Documents, optional Hyper-V export, Sonarr/Radarr/Prowlarr/Bazarr/Jackett/qBittorrent)
+- **VM / media stack** backups for the indexer/downloader/monitor VM (Documents, optional Hyper-V export, Sonarr/Radarr/Prowlarr/Bazarr/Jackett/qBittorrent), written to `\\TUCKER-DESKTOP\Shared R Drive\VM Backups` by default
 
 ## Repository layout
 
@@ -16,10 +16,12 @@ Windows-focused backup scripts for:
 
 ## Quick start
 
-Run from PowerShell on your Windows host:
+Run from PowerShell on the machine being backed up:
 
 ```powershell
+# On the Plex server
 powershell -ExecutionPolicy Bypass -File ".\server\backup-plex-server.ps1"
+# On the indexer/downloader/monitor VM, from an elevated prompt
 powershell -ExecutionPolicy Bypass -File ".\vm\backup-vm-and-media-stack.ps1"
 ```
 
